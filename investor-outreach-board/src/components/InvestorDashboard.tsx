@@ -1,12 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { EyeIcon, ChevronDownIcon } from '@heroicons/react/24/outline';
-import InvestorModal from './InvestorModal'; // Corrected import path
+import { EyeIcon } from '@heroicons/react/24/outline';
+import InvestorModal from './InvestorModal';
+import { AddInvestorModal } from './AddInvestorModal'; // NEW: Import the new modal
 
-// UPDATED: This type now matches the data coming from your Python backend
 export interface Investor {
   id: number;
   name: string;
@@ -18,18 +17,13 @@ export interface Investor {
   status: string;
   linkedin_url: string;
   domain: string;
-  // Add any other fields from your CSV that you want to use
+  notes_for_pitch: string;
+  bio: string;
+  thesis: string;
   [key: string]: any; 
 }
 
-const statusOptions = [
-  'To Research',
-  'Ready to Pitch',
-  'Pitched',
-  'Follow-up',
-  'Passed',
-  'Invested'
-];
+const statusOptions = ['To Research', 'Ready to Pitch', 'Pitched', 'Follow-up', 'Passed', 'Invested'];
 
 const getLikelihoodColor = (score: number) => {
   if (score > 70) return 'bg-green-500 text-black';
@@ -38,46 +32,39 @@ const getLikelihoodColor = (score: number) => {
 };
 
 const InvestorDashboard = () => {
-  // REMOVED: mockInvestors is gone. We now fetch live data.
   const [investors, setInvestors] = useState<Investor[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedInvestor, setSelectedInvestor] = useState<Investor | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isPitchModalOpen, setIsPitchModalOpen] = useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false); // NEW: State for the add modal
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const API_URL = 'http://localhost:5000';
 
-  // ADDED: Fetch data from the backend when the component loads
-  useEffect(() => {
-    const fetchInvestors = async () => {
-        try {
-            const response = await fetch(`${API_URL}/api/investors`);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            const data = await response.json();
-            setInvestors(data);
-        } catch (e: any) {
-            setError(e.message);
-        } finally {
-            setIsLoading(false);
+  const fetchInvestors = useCallback(async () => {
+    setIsLoading(true);
+    try {
+        const response = await fetch(`${API_URL}/api/investors`);
+        if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.error || `HTTP error! status: ${response.status}`);
         }
-    };
-    fetchInvestors();
+        const data = await response.json();
+        setInvestors(data);
+    } catch (e: any) {
+        setError(e.message);
+    } finally {
+        setIsLoading(false);
+    }
   }, []);
 
-  // UPDATED: This function now sends the status change to the backend
+  useEffect(() => {
+    fetchInvestors();
+  }, [fetchInvestors]);
+
   const handleStatusChange = async (investorId: number, newStatus: string) => {
-    // Optimistic UI update for a smooth experience
-    setInvestors(prev => 
-      prev.map(investor => 
-        investor.id === investorId 
-          ? { ...investor, status: newStatus }
-          : investor
-      )
-    );
-    // Send the update to the backend
+    setInvestors(prev => prev.map(inv => inv.id === investorId ? { ...inv, status: newStatus } : inv));
     try {
         await fetch(`${API_URL}/api/update_status`, {
             method: 'POST',
@@ -86,13 +73,12 @@ const InvestorDashboard = () => {
         });
     } catch (error) {
         console.error('Failed to update status on server:', error);
-        // Optionally, you could add logic here to revert the UI change if the server call fails
     }
   };
 
   const handleRowClick = (investor: Investor) => {
     setSelectedInvestor(investor);
-    setIsModalOpen(true);
+    setIsPitchModalOpen(true);
   };
 
   const filteredInvestors = investors.filter(investor =>
@@ -101,22 +87,14 @@ const InvestorDashboard = () => {
     (investor.twitter_handle && investor.twitter_handle.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  const closeModal = () => {
-    setIsModalOpen(false);
-    setSelectedInvestor(null);
-  };
-
-  if (isLoading) return <p className="text-white p-6">Loading investor data from backend...</p>;
-  if (error) return <p className="text-red-500 p-6">Error fetching data: {error}</p>;
+  if (isLoading) return <p className="text-white p-6 text-center">Loading investor data from backend...</p>;
+  if (error) return <p className="text-red-500 p-6 text-center">Error fetching data: {error}</p>;
 
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-6">
-            Investor Outreach Dashboard
-          </h1>
+          <h1 className="text-3xl font-bold text-foreground mb-6">Investor Outreach Dashboard</h1>
           <div className="flex gap-4 mb-6">
             <Input
               placeholder="Search investors..."
@@ -124,13 +102,13 @@ const InvestorDashboard = () => {
               onChange={(e) => setSearchTerm(e.target.value)}
               className="max-w-md bg-card border-border text-foreground placeholder:text-muted-foreground"
             />
-            <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
+            {/* NEW: This button now opens the AddInvestorModal */}
+            <Button onClick={() => setIsAddModalOpen(true)} className="bg-primary text-primary-foreground hover:bg-primary/90">
                 + Add New Investor
             </Button>
           </div>
         </div>
 
-        {/* Table */}
         <div className="bg-card rounded-lg border border-border overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -153,10 +131,11 @@ const InvestorDashboard = () => {
                   >
                     <td className="p-4">
                       <div className="flex items-center gap-3">
+                        {/* FIX: Use avatar_url and add a fallback */}
                         <img
                           src={investor.avatar_url || `https://i.pravatar.cc/40?u=${investor.id}`}
                           alt={investor.name}
-                          className="w-10 h-10 rounded-full object-cover"
+                          className="w-10 h-10 rounded-full object-cover bg-muted"
                         />
                         <div>
                           <div className="font-medium text-foreground">{investor.name}</div>
@@ -184,11 +163,7 @@ const InvestorDashboard = () => {
                         </SelectTrigger>
                         <SelectContent className="bg-popover border-border">
                           {statusOptions.map((status) => (
-                            <SelectItem 
-                              key={status} 
-                              value={status}
-                              className="text-popover-foreground hover:bg-accent hover:text-accent-foreground"
-                            >
+                            <SelectItem key={status} value={status} className="text-popover-foreground hover:bg-accent hover:text-accent-foreground">
                               {status}
                             </SelectItem>
                           ))}
@@ -197,10 +172,7 @@ const InvestorDashboard = () => {
                     </td>
                     <td className="p-4">
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRowClick(investor);
-                          }}
+                          onClick={(e) => { e.stopPropagation(); handleRowClick(investor); }}
                           className="p-2 text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors"
                           title="View/Pitch"
                         >
@@ -215,11 +187,19 @@ const InvestorDashboard = () => {
         </div>
       </div>
 
-      {/* Modal */}
-      <InvestorModal
-        isOpen={isModalOpen}
-        onClose={closeModal}
-        investor={selectedInvestor}
+      {isPitchModalOpen && selectedInvestor && (
+        <InvestorModal
+          isOpen={isPitchModalOpen}
+          onClose={() => setIsPitchModalOpen(false)}
+          investor={selectedInvestor}
+        />
+      )}
+      
+      {/* NEW: Render the AddInvestorModal */}
+      <AddInvestorModal 
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onInvestorsAdded={fetchInvestors}
       />
     </div>
   );
