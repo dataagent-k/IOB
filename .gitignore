@@ -1,0 +1,33 @@
+# Logs
+investor-outreach-board/logs
+*.log
+investor-outreach-board/npm-debug.log*
+investor-outreach-board/yarn-debug.log*
+investor-outreach-board/yarn-error.log*
+investor-outreach-board/pnpm-debug.log*
+investor-outreach-board/lerna-debug.log*
+
+investor-outreach-board/node_modules
+investor-outreach-board/dist
+investor-outreach-board/dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Python
+investor_crm_backend/venv/
+investor_crm_backend/__pycache__/
+investor_crm_backend/*.pyc
+investor_crm_backend/*.pyo
+investor_crm_backend/*.pyd
+investor_crm_backend/.Python
+investor_crm_backend/.env
